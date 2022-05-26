@@ -1,0 +1,14 @@
+[home]
+home ansible_host=ip
+
+[home:vars]
+ansible_user=username
+ansible_ssh_pass=password
+
+[all:vars]
+ansible_connection=ansible.netcommon.network_cli
+ansible_network_os=community.routeros.routeros
+
+
+[linux_servers]
+screen  ansible_host=ip  owner=username

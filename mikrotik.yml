@@ -1,0 +1,50 @@
+---
+- name: MikroTik
+  become: yes
+  hosts: home
+  gather_facts: false
+
+  tasks:
+
+  - name: Check verison RouterOS
+    community.routeros.command:
+      commands:
+        -  /system resource print
+    register: system_resource_print
+
+  - name: Show version RouterOS
+    debug:
+      var: system_resource_print.stdout_lines
+
+  - name: Gather facts
+    community.routeros.facts:
+
+  - name: Show a fact
+    debug:
+      msg: "Hostname: {{ ansible_net_hostname }}"
+
+
+  - name: Get hostname
+    community.routeros.command:
+      commands:
+        -  /system identity print
+    register: hostname
+
+  - name: Show hostname
+    debug:
+      var: hostname.stdout_lines
+
+  - name: get config
+    community.routeros.command:
+      commands:
+        -  /export
+    register: export
+
+  - name: Show config
+    debug:
+      var: export.stdout_lines
+
+  - name: save output
+    copy:
+      content: "{{ export.stdout_lines }}"
+      dest: "/var/tftpd/MikroTik/{{ inventory_hostname }}.cfg"

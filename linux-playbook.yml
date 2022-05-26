@@ -1,0 +1,59 @@
+---
+- name: Test connection to my servers
+  hosts: all
+  become: yes
+
+  vars:
+    source_file: hosts.txt
+    destin_file: /root
+    secret     : qweasdzxcrtyfghvbn
+    message1   : Hello
+    message2   : world
+
+  tasks:
+
+  - name: Check and print linux version
+    debug: var=ansible_os_family
+
+  - name: Update DB
+    shell: updatedb
+    run_once: true
+
+
+  - block:
+
+    - name: Ping my servers
+      ping:
+
+    - name: uninstall stress
+      apt : name=stress state=absent
+    when: ansible_os_family == "Debian"
+
+  - name: copy file
+    copy: src={{ source_file }} dest={{ destin_file }} mode=0555
+
+  - name : Print secret
+    debug:
+      var: secret
+
+  - debug:
+      msg: "secret: {{ secret }}"
+
+  - set_fact: full_message="{{ message1 }} {{ message2 }}"
+
+  - debug:
+      var: full_message
+
+  - debug:
+      var: ansible_system_vendor
+
+  - shell   : uptime
+    register: results
+
+  - debug:
+      var: results.stdout
+
+
+  handlers :
+  - name   : restart_service
+    service: name=httpd state=restarted

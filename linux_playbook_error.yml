@@ -1,0 +1,22 @@
+---
+- name: Ansible error debug
+  hosts: all
+  any_errors_fatal: true
+  become: yes
+
+
+  tasks:
+  - name: task1
+    apt: name=treeeeee state=latest
+    ignore_errors: yes
+
+  - name: task2
+    shell: cat /home/username/myfile.txt
+    register: results
+    failed_when: results.rc == 0
+
+  - debug:
+      var: results
+
+  - name: task3
+    shell: echo "Hello hello"
