@@ -1,0 +1,124 @@
+# we need to create hosts such as:
+#[masters]
+#master ansible_host=master_ip ansible_user=root
+#[workers]
+#worker1 ansible_host=worker_1_ip ansible_user=root
+#worker2 ansible_host=worker_2_ip ansible_user=root
+#[all:vars]
+#ansible_python_interpreter=/usr/bin/python3
+
+- hosts: all
+  become: yes
+  tasks:
+    - name: create the 'ansible' user  # create user ansible
+      user: name=ansible append=yes state=present createhome=yes shell=/bin/bash
+
+    - name: allow 'ansible' to have passwordless sudo # allow ansible use sudo withour pass
+      lineinfile:
+        dest: /etc/sudoers
+        line: 'ansible ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
+    - name: set up authorized keys for the ansible user # allow ssh access for user ansible
+      authorized_key: user=ansible key="{{item}}"
+      with_file:
+        - ~/.ssh/id_rsa.pub
+
+#install docker component
+    - name: install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: install APT Transport HTTPS
+      apt:
+        name: apt-transport-https
+        state: present
+
+    - name: add Kubernetes apt-key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: add Kubernetes' APT repository
+      apt_repository:
+       repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+       state: present
+       filename: 'kubernetes'
+
+    - name: install kubelet
+      apt:
+        name: kubelet=1.14.0-00
+        state: present
+        update_cache: true
+
+    - name: install kubeadm
+      apt:
+        name: kubeadm=1.14.0-00
+        state: present
+
+- hosts: master
+  become: yes
+  tasks:
+    - name: install kubectl
+      apt:
+        name: kubectl=1.14.0-00
+        state: present
+        force: yes
+
+# cluster_initialized
+- hosts: master
+  become: yes
+  tasks:
+    - name: initialize the cluster
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16 >> cluster_initialized.txt
+      args:
+        chdir: $HOME
+        creates: cluster_initialized.txt
+# add home folder .kube for store config and administrator key
+    - name: create .kube directory
+      become: yes
+      become_user: ansible
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    - name: copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ansible/.kube/config
+        remote_src: yes
+        owner: ansible
+# instal flannel
+    - name: install Pod network
+      become: yes
+      become_user: ansible
+      shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/a70459be0084506e4ec919aa1c114638878db11b/Documentation/kube-flannel.yml >> pod_network_setup.txt
+      args:
+        chdir: $HOME
+        creates: pod_network_setup.txt
+
+# add nodes
+- hosts: master
+  become: yes
+  gather_facts: false
+  tasks:
+    - name: get join command
+      shell: kubeadm token create --print-join-command
+      register: join_command_raw
+
+    - name: set join command
+      set_fact:
+        join_command: "{{ join_command_raw.stdout_lines[0] }}"
+
+
+- hosts: workers
+  become: yes
+  tasks:
+    - name: join cluster
+      shell: "{{ hostvars['master'].join_command }} >> node_joined.txt"
+      args:
+        chdir: $HOME
+        creates: node_joined.txt 
